@@ -25,6 +25,18 @@
                 "kind": "build",
                 "isDefault": true
             }
+        },
+        {
+            "label": "Build to WebAssembly",
+            "type": "shell",
+            "command": "em++",
+            "args": [
+                "chip8.cpp",
+                "-s",
+                "WASM=1",
+                "-o",
+                "/home/ayush/Projects/chip8/chip8.html"
+            ]
         }
     ]
 }

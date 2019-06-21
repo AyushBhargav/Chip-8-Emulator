@@ -5,9 +5,11 @@
 #include <iostream>
 #include <stack>
 
+using namespace std;
+
 class VM {
-    
-public:
+
+private:
     /* Memory */
     uint8_t memory[4096];
     uint8_t reg[16];
@@ -23,15 +25,11 @@ public:
     /* Inputs */
     bool input[16];
 
-    VM() {
-        std::fill(memory, memory + 4096, 0);
-        std::fill(reg, reg + 16, 0);
-        i_reg = pc_reg = 0;
-        std::fill(graphics, graphics + 2048, false);
-        delay_timer = sound_timer = 0;
-        std::fill(input, input + 16, false);
-    }
-
+public:
+    void init();
+    void loadProgram(string);
+    bool hasNext();
+    void tick();
 };
 
 #endif 
