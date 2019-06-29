@@ -5,3 +5,7 @@ authors = ["ayush"]
 edition = "2018"
 
 [dependencies]
+
+[lib]
+path = "src/main.rs"
+crate-type = ["cdylib"]

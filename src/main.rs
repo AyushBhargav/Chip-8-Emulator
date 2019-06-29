@@ -22,14 +22,62 @@ pub struct VirtualMachine {
 
 fn fetch_instruction(memory: [u8; 4096], program_counter: u16) -> u16{
     // Each opcode consists of two bytes. Second operand is casted as u16 as u16 | u8 is noit permissible. :(
-    let opcode: u16 = ((memory[program_counter as usize]) as u16 << 8) | (memory[(program_counter + 1) as usize] as u16);
-    program_counter += 2;
+    let opcode: u16 = ((memory[program_counter as usize] as u16) << 8) | (memory[(program_counter + 1) as usize] as u16);
     opcode
 }
 
 impl VirtualMachine {
 
     fn execute_op(&mut self, opcode: u16) {
+        match opcode {
+            // Jump statement.
+            0x1000 ... 0x1FFF => self.program_counter = (opcode & 0xFFF),
+            // Call the subroutine statement.
+            0x2000 ... 0x2FFF => {
+                self.stack[self.stack_top as usize] = self.program_counter;
+                self.stack_top += 1;
+                self.program_counter = opcode * 0xFFF;
+            },
+            // Skip next instruction if given register equals the operand.
+            0x3000 ... 0x3FFF => {
+                let x: u8 = ((opcode & 0xF00) as u8) >> 8;
+                let vx: u8 = self.registers[x as usize];
+                if vx == (opcode & 0xFF) as u8 {
+                    self.program_counter += 4; // Skip 4 bytes.
+                }
+            },
+            // Skip next instruction if given register doesn't equal the operand.
+            0x4000 ... 0x4FFF => {
+                let x: u8 = ((opcode & 0xF00) as u8) >> 8;
+                let vx: u8 = self.registers[x as usize];
+                if vx != (opcode & 0xFF) as u8 {
+                    self.program_counter += 4; // Skip 4 bytes.
+                }
+            },
+            // Skip next instruction if given registers aren't equal.
+            0x5000 ... 0x5FFF => {
+                let x: u8 = ((opcode & 0xF00) as u8) >> 8;
+                let vx: u8 = self.registers[x as usize];
+                let y: u8 = (opcode & 0xFF) as u8;
+                let vy: u8 = self.registers[y as usize];
+                if vx == vy {
+                    self.program_counter += 4; // Skip 4 bytes.
+                }
+            },
+            // Set given operand to specified register.
+            0x6000 ... 0x6FFF => {
+                let x: u8 = ((opcode & 0xF00) as u8) >> 8;
+                self.registers[x as usize] = (opcode & 0xFF) as u8;
+                self.program_counter += 2;
+            },
+            // Add given operand to specified register.
+            0x7000 ... 0x7FFF => {
+                let x: u8 = ((opcode & 0xF00) as u8) >> 8;
+                self.registers[x as usize] += (opcode & 0xFF) as u8;
+                self.program_counter += 2;
+            },
+            // TODO: Continue from here.
+        }
     }
 
     // Single CPU cycle
@@ -40,7 +88,8 @@ impl VirtualMachine {
     }
 }
 
-static mut Chip: VirtualMachine = VirtualMachine {
+// Static objects which will be interfaced with Javascript.
+static mut CHIP8: VirtualMachine = VirtualMachine {
     memory: [0; 4096],
     registers: [0; 16],
     index_register: 0,
@@ -55,6 +104,27 @@ static mut Chip: VirtualMachine = VirtualMachine {
     stack: [0; 16],
     stack_top: -1
 };
+
+#[no_mangle]
+pub fn cpu_cycle() {
+    unsafe {
+        CHIP8.tick();
+    }
+}
+
+#[no_mangle]
+pub fn get_graphics() -> &'static [bool; 64 * 32] {
+    unsafe {
+        &CHIP8.video
+    }
+}
+
+#[no_mangle]
+pub fn get_memory() -> &'static [u8; 4096] {
+    unsafe {
+        &CHIP8.memory
+    }
+}
 
 fn main() {
     println!("Hello, world!");
