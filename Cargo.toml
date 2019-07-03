@@ -5,6 +5,7 @@ authors = ["ayush"]
 edition = "2018"
 
 [dependencies]
+rand = "0.7.0"
 
 [lib]
 path = "src/main.rs"

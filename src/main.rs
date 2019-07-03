@@ -1,9 +1,13 @@
+extern crate rand;
+
+use rand::Rng;
 
 pub struct VirtualMachine {
     // RAM for CPU (4K bytes of memory)
     pub memory: [u8; 4096],
     // Registers from V0 to VF. VF will hold the carry flags for computations.
     pub registers: [u8; 16],
+    pub vf: u8,
     // Index register
     pub index_register: u16,
     // Program counter
@@ -17,7 +21,7 @@ pub struct VirtualMachine {
     pub sound_timer: u8, // Sounds a buzzer like sound whenver it reaches zero.
     // Program stack. Chip-8 can only go upto 16 level deep.
     pub stack: [u16; 16],
-    pub stack_top: i8
+    pub stack_top: i8,
 }
 
 fn fetch_instruction(memory: [u8; 4096], program_counter: u16) -> u16{
@@ -58,7 +62,7 @@ impl VirtualMachine {
             0x5000 ... 0x5FFF => {
                 let x: u8 = ((opcode & 0xF00) as u8) >> 8;
                 let vx: u8 = self.registers[x as usize];
-                let y: u8 = (opcode & 0xFF) as u8;
+                let y: u8 = ((opcode & 0xF0) as u8) >> 4;
                 let vy: u8 = self.registers[y as usize];
                 if vx == vy {
                     self.program_counter += 4; // Skip 4 bytes.
@@ -76,7 +80,201 @@ impl VirtualMachine {
                 self.registers[x as usize] += (opcode & 0xFF) as u8;
                 self.program_counter += 2;
             },
-            // TODO: Continue from here.
+            // Register manipulation.
+            0x8000 ... 0x8FFFF => {
+                let x: u8 = ((opcode & 0xF00) as u8) >> 8;
+                let y: u8 = ((opcode & 0xF0) as u8) >> 4;
+                match opcode & 0xF {
+                    0x0 => self.registers[x as usize] = self.registers[y as usize],
+                    0x1 => self.registers[x as usize] |= self.registers[y as usize],
+                    0x2 => self.registers[x as usize] &= self.registers[y as usize],
+                    0x3 => self.registers[x as usize] ^= self.registers[y as usize],
+                    0x4 => {
+                        let sum: u16 = (self.registers[x as usize] + self.registers[y as usize]) as u16;
+                        self.registers[x as usize] = (sum & 0xFF) as u8;
+                        if sum > 0xFF {
+                            // Set carry register.
+                            self.registers[self.vf as usize] = 0x1;
+                        }
+                        else {
+                            // Unset carry register.
+                            self.registers[self.vf as usize] = 0x0;
+                        }
+                        self.program_counter += 2;
+                    },
+                    0x5 => {
+                        let sub: u16 = (self.registers[x as usize] - self.registers[y as usize]) as u16;
+                        self.registers[x as usize] = (sub & 0xFF) as u8;
+                        if sub > 0 {
+                            // Set carry register for no borrow.
+                            self.registers[self.vf as usize] = 0x1;
+                        }
+                        else {
+                            // Unset carry register for borrow.
+                            self.registers[self.vf as usize] = 0x0;
+                        }
+                        self.program_counter += 2;
+                    },
+                    0x6 => {
+                        self.registers[self.vf as usize] = self.registers[x as usize] & 0x01;
+                        self.registers[x as usize] >>= 1;
+                        self.program_counter += 2;
+                    },
+                    0x7 => {
+                        let sub: u16 = (self.registers[y as usize] - self.registers[x as usize]) as u16;
+                        self.registers[x as usize] = (sub & 0xFF) as u8;
+                        if sub > 0 {
+                            // Set carry register for no borrow.
+                            self.registers[self.vf as usize] = 0x1;
+                        }
+                        else {
+                            // Unset carry register for borrow.
+                            self.registers[self.vf as usize] = 0x0;
+                        }
+                        self.program_counter += 2
+                    },
+                    0xE => {
+                        self.registers[self.vf as usize] = self.registers[x as usize] >> 7;
+                        self.registers[x as usize] <<= 1;
+                        self.program_counter += 2
+                    }
+                }
+            },
+            // Skip next instruction if Vx is not equal to Vy.
+            0x9000 ... 0x9FFF => {
+                let x: u8 = ((opcode & 0xFFF) as u8) >> 8;
+                let y: u8 = ((opcode & 0xFF) as u8) >> 4;
+                if self.registers[x as usize] != self.registers[y as usize] {
+                    self.program_counter += 4; // Skip next instruction.
+                }
+                else {
+                    self.program_counter += 2;
+                }
+            },
+            // Set index pointer to memory location.
+            0xA000 ... 0xAFFF => {
+                self.index_register = opcode & (0x0FFF);
+                self.program_counter += 2;
+            },
+            // Jump to given address + V0
+            0xB000 ... 0xBFFF => self.program_counter = ((opcode & 0x0FFF) + (self.registers[0 as usize] as u16)) as u16,
+            // Assign random number to Vx register.
+            0xC000 ... 0xCFFF => {
+                let x: u8 = ((opcode & 0x0F00) as u8) >> 8;
+                let n: u8 = (opcode & 0x00FF) as u8;
+                let mut rng = rand::thread_rng();
+                let mut random_number = rng.gen_range(0, 256);
+                self.registers[x as usize] &= random_number;
+                self.program_counter += 2;
+            },
+            0xD000 ... 0xDFFF => {
+                let x: u8 = ((opcode & 0x0F00) as u8) >> 8;
+                let y: u8 = ((opcode & 0x00F0) as u8) >> 4;
+                let n: u8 = ((opcode & 0x000F) as u8);
+                let pos_x: u8 = self.registers[x as usize];
+                let pos_y: u8 = self.registers[y as usize];
+                for offset in 0 .. n {
+                    let sprite: u8 = self.memory[(self.index_register + offset as u16) as usize];
+                    for i in 0 .. 8 {
+                        if (sprite & (0x80 >> i)) != 0 {
+                            // Sprite-pixel will be inverted.
+                            if self.video[(pos_x + i + (pos_y + offset) * 64) as usize] {
+                                self.registers[self.vf as usize] = 0x01;
+                            }
+                            self.video[(pos_x + i + (pos_y + offset) * 64) as usize] = !self.video[(pos_x + i + (pos_y + offset) * 64) as usize];
+                        }
+                    }
+                }
+                self.program_counter += 2;
+            },
+            0xE09E ... 0xEF9E => {
+                let x: u8 = ((opcode & 0x0F00) as u8) >> 8;
+                let key: u8 = self.registers[self.x as usize];
+                if self.keypad[key as usize] {
+                    self.program_counter += 4;
+                }
+                else {
+                    self.program_counter += 2;
+                }
+            },
+            0xE0A1 ... 0xEFA1 => {
+                let x: u8 = ((opcode & 0x0F00) as u8) >> 8;
+                let key: u8 = self.registers[self.x as usize];
+                if !self.keypad[key as usize] {
+                    self.program_counter += 4;
+                }
+                else {
+                    self.program_counter += 2;
+                }
+            },
+            0xF007 ... 0xFF07 => {
+                let x: u8 = ((opcode & 0x0F00) as u8) >> 8;
+                self.delay_timer = self.registers[x as usize];
+                self.program_counter += 2;
+            },
+            0xF00A ... 0xFF0A => {
+                let x: u8 = ((opcode & 0x0F00) as u8) >> 8;
+                let mut input_avail: bool = false;
+                for input in self.keypad.iter() {
+                    if *input {
+                        input_avail = true;
+                    }
+                }
+                if input_avail {
+                    self.program_counter += 2;
+                }
+            },
+            0xF015 ... 0xFF15 => {
+                let x: u8 = ((opcode & 0x0F00) as u8) >> 8;
+                self.delay_timer = self.registers[x as usize];
+                self.program_counter += 2;
+            },
+            0xF018 ... 0xFF18 => {
+                let x: u8 = ((opcode & 0x0F00) as u8) >> 8;
+                self.sound_timer = self.registers[x as usize];
+                self.program_counter += 2;
+            },
+            0xF01E ... 0xFF1E => {
+                let x: u8 = ((opcode & 0x0F00) as u8) >> 8;
+                self.index_register += (self.registers[x as usize] as u16);
+                self.program_counter += 2;
+            },
+            0xF029 ... 0xFF29 => {
+                let x: u8 = ((opcode & 0x0F00) as u8) >> 8;
+                let ch: u8 = self.registers[x as usize];
+                self.index_register = self.memory[(ch * 5) as usize] as u16;
+                self.program_counter += 2;
+            },
+            0xF033 ... 0xFF33 => {
+                let x: u8 = ((opcode & 0x0F00) as u8) >> 8;
+                let n: u8 = self.registers[x as usize];
+                self.memory[self.index_register as usize] = (n & 0x0F00) >> 8;
+                self.memory[(self.index_register + 1) as usize] = (n & 0x00F0) >> 4;
+                self.memory[(self.index_register + 2) as usize] = (n & 0x000F);
+                self.program_counter += 2;
+            },
+            0xF055 ... 0xFF55 => {
+                let x: u8 = ((opcode & 0x0F00) as u8) >> 8;
+                for i in 0 .. x + 1 {
+                    self.memory[(self.index_register + i as u16) as usize] = self.registers[i as usize];
+                }
+                self.program_counter += 2;
+            },
+            0xF065 ... 0xFF65 => {
+                let x: u8 = ((opcode & 0x0F00) as u8) >> 8;
+                for i in 0 .. x + 1 {
+                    self.registers[i as usize] = self.memory[(self.index_register + i as u16) as usize];
+                }
+                self.program_counter += 2;
+            }
+        }
+    }
+
+    #[no_mangle]
+    // Load game fonts
+    pub fn load_fonts(&mut self, font_set: [u8; 80]) {
+        for i in 0 .. 80 {
+            self.memory[i as usize] = font_set[i as usize];
         }
     }
 
@@ -93,6 +291,7 @@ static mut CHIP8: VirtualMachine = VirtualMachine {
     memory: [0; 4096],
     registers: [0; 16],
     index_register: 0,
+    vf: 15,
     // Programs start at memory location of 0x200.
     program_counter: 0x200,
     // Blank screen at the start.
@@ -102,7 +301,7 @@ static mut CHIP8: VirtualMachine = VirtualMachine {
     sound_timer: 0,
     // Empty Stack.
     stack: [0; 16],
-    stack_top: -1
+    stack_top: -1,
 };
 
 #[no_mangle]
@@ -124,6 +323,29 @@ pub fn get_memory() -> &'static [u8; 4096] {
     unsafe {
         &CHIP8.memory
     }
+}
+
+#[no_mangle]
+pub fn chip8_init() {
+    let chip8_fontset: [u8; 80] = [
+        0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
+        0x20, 0x60, 0x20, 0x20, 0x70, // 1
+        0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
+        0xF0, 0x10, 0xF0, 0x10, 0xF0, // 3
+        0x90, 0x90, 0xF0, 0x10, 0x10, // 4
+        0xF0, 0x80, 0xF0, 0x10, 0xF0, // 5
+        0xF0, 0x80, 0xF0, 0x90, 0xF0, // 6
+        0xF0, 0x10, 0x20, 0x40, 0x40, // 7
+        0xF0, 0x90, 0xF0, 0x90, 0xF0, // 8
+        0xF0, 0x90, 0xF0, 0x10, 0xF0, // 9
+        0xF0, 0x90, 0xF0, 0x90, 0x90, // A
+        0xE0, 0x90, 0xE0, 0x90, 0xE0, // B
+        0xF0, 0x80, 0x80, 0x80, 0xF0, // C
+        0xE0, 0x90, 0x90, 0x90, 0xE0, // D
+        0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
+        0xF0, 0x80, 0xF0, 0x80, 0x80  // F
+    ];
+
 }
 
 fn main() {
