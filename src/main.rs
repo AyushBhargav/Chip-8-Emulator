@@ -81,7 +81,7 @@ impl VirtualMachine {
                 self.program_counter += 2;
             },
             // Register manipulation.
-            0x8000 ... 0x8FFFF => {
+            0x8000 ... 0x8FFF => {
                 let x: u8 = ((opcode & 0xF00) as u8) >> 8;
                 let y: u8 = ((opcode & 0xF0) as u8) >> 4;
                 match opcode & 0xF {
@@ -137,7 +137,8 @@ impl VirtualMachine {
                         self.registers[self.vf as usize] = self.registers[x as usize] >> 7;
                         self.registers[x as usize] <<= 1;
                         self.program_counter += 2
-                    }
+                    },
+                    _ => panic!("Unrecognized opcode: {}", opcode)
                 }
             },
             // Skip next instruction if Vx is not equal to Vy.
@@ -163,8 +164,8 @@ impl VirtualMachine {
                 let x: u8 = ((opcode & 0x0F00) as u8) >> 8;
                 let n: u8 = (opcode & 0x00FF) as u8;
                 let mut rng = rand::thread_rng();
-                let mut random_number = rng.gen_range(0, 256);
-                self.registers[x as usize] &= random_number;
+                let random_number = rng.gen_range(0, 256) as u8;
+                self.registers[x as usize] = n & random_number;
                 self.program_counter += 2;
             },
             0xD000 ... 0xDFFF => {
@@ -189,7 +190,7 @@ impl VirtualMachine {
             },
             0xE09E ... 0xEF9E => {
                 let x: u8 = ((opcode & 0x0F00) as u8) >> 8;
-                let key: u8 = self.registers[self.x as usize];
+                let key: u8 = self.registers[x as usize];
                 if self.keypad[key as usize] {
                     self.program_counter += 4;
                 }
@@ -199,7 +200,7 @@ impl VirtualMachine {
             },
             0xE0A1 ... 0xEFA1 => {
                 let x: u8 = ((opcode & 0x0F00) as u8) >> 8;
-                let key: u8 = self.registers[self.x as usize];
+                let key: u8 = self.registers[x as usize];
                 if !self.keypad[key as usize] {
                     self.program_counter += 4;
                 }
@@ -248,7 +249,7 @@ impl VirtualMachine {
             0xF033 ... 0xFF33 => {
                 let x: u8 = ((opcode & 0x0F00) as u8) >> 8;
                 let n: u8 = self.registers[x as usize];
-                self.memory[self.index_register as usize] = (n & 0x0F00) >> 8;
+                self.memory[self.index_register as usize] = (n & 0xF00) >> 8;
                 self.memory[(self.index_register + 1) as usize] = (n & 0x00F0) >> 4;
                 self.memory[(self.index_register + 2) as usize] = (n & 0x000F);
                 self.program_counter += 2;
@@ -266,6 +267,9 @@ impl VirtualMachine {
                     self.registers[i as usize] = self.memory[(self.index_register + i as u16) as usize];
                 }
                 self.program_counter += 2;
+            },
+            _ => {
+                panic!("Can't recognize parsed opcode: {}", opcode);
             }
         }
     }
