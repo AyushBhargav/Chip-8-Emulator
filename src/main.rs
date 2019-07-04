@@ -16,7 +16,7 @@ pub struct VirtualMachine {
     pub video: [bool; 64 * 32],
     // Keypad for 16 buttons
     pub keypad: [bool; 16],
-    // Timer registers
+    // Timer registersu
     pub delay_timer: u8,
     pub sound_timer: u8, // Sounds a buzzer like sound whenver it reaches zero.
     // Program stack. Chip-8 can only go upto 16 level deep.
@@ -35,15 +35,15 @@ impl VirtualMachine {
     fn execute_op(&mut self, opcode: u16) {
         match opcode {
             // Jump statement.
-            0x1000 ... 0x1FFF => self.program_counter = opcode & 0xFFF,
+            0x1000 ..= 0x1FFF => self.program_counter = opcode & 0xFFF,
             // Call the subroutine statement.
-            0x2000 ... 0x2FFF => {
+            0x2000 ..= 0x2FFF => {
                 self.stack[self.stack_top as usize] = self.program_counter;
                 self.stack_top += 1;
                 self.program_counter = opcode * 0xFFF;
             },
             // Skip next instruction if given register equals the operand.
-            0x3000 ... 0x3FFF => {
+            0x3000 ..= 0x3FFF => {
                 let x: u8 = ((opcode & 0xF00) >> 8) as u8;
                 let vx: u8 = self.registers[x as usize];
                 if vx == (opcode & 0xFF) as u8 {
@@ -51,7 +51,7 @@ impl VirtualMachine {
                 }
             },
             // Skip next instruction if given register doesn't equal the operand.
-            0x4000 ... 0x4FFF => {
+            0x4000 ..= 0x4FFF => {
                 let x: u8 = ((opcode & 0xF00) >> 8) as u8;
                 let vx: u8 = self.registers[x as usize];
                 if vx != (opcode & 0xFF) as u8 {
@@ -59,7 +59,7 @@ impl VirtualMachine {
                 }
             },
             // Skip next instruction if given registers aren't equal.
-            0x5000 ... 0x5FFF => {
+            0x5000 ..= 0x5FFF => {
                 let x: u8 = ((opcode & 0xF00) >> 8) as u8;
                 let vx: u8 = self.registers[x as usize];
                 let y: u8 = ((opcode & 0xF0) >> 4) as u8;
@@ -69,19 +69,19 @@ impl VirtualMachine {
                 }
             },
             // Set given operand to specified register.
-            0x6000 ... 0x6FFF => {
+            0x6000 ..= 0x6FFF => {
                 let x: u8 = ((opcode & 0xF00) >> 8) as u8;
                 self.registers[x as usize] = (opcode & 0xFF) as u8;
                 self.program_counter += 2;
             },
             // Add given operand to specified register.
-            0x7000 ... 0x7FFF => {
+            0x7000 ..= 0x7FFF => {
                 let x: u8 = ((opcode & 0xF00) >> 8) as u8;
                 self.registers[x as usize] += (opcode & 0xFF) as u8;
                 self.program_counter += 2;
             },
             // Register manipulation.
-            0x8000 ... 0x8FFF => {
+            0x8000 ..= 0x8FFF => {
                 let x: u8 = ((opcode & 0xF00) >> 8) as u8;
                 let y: u8 = ((opcode & 0xF0) as u8) >> 4;
                 match opcode & 0xF {
@@ -142,7 +142,7 @@ impl VirtualMachine {
                 }
             },
             // Skip next instruction if Vx is not equal to Vy.
-            0x9000 ... 0x9FFF => {
+            0x9000 ..= 0x9FFF => {
                 let x: u8 = ((opcode & 0xFFF) >> 8) as u8;
                 let y: u8 = ((opcode & 0xFF) >> 4) as u8;
                 if self.registers[x as usize] != self.registers[y as usize] {
@@ -153,14 +153,14 @@ impl VirtualMachine {
                 }
             },
             // Set index pointer to memory location.
-            0xA000 ... 0xAFFF => {
+            0xA000 ..= 0xAFFF => {
                 self.index_register = opcode & (0x0FFF);
                 self.program_counter += 2;
             },
             // Jump to given address + V0
-            0xB000 ... 0xBFFF => self.program_counter = ((opcode & 0x0FFF) + (self.registers[0 as usize] as u16)) as u16,
+            0xB000 ..= 0xBFFF => self.program_counter = ((opcode & 0x0FFF) + (self.registers[0 as usize] as u16)) as u16,
             // Assign random number to Vx register.
-            0xC000 ... 0xCFFF => {
+            0xC000 ..= 0xCFFF => {
                 let x: u8 = ((opcode & 0x0F00) >> 8) as u8;
                 let n: u8 = (opcode & 0x00FF) as u8;
                 let mut rng = rand::thread_rng();
@@ -168,7 +168,7 @@ impl VirtualMachine {
                 self.registers[x as usize] = n & random_number;
                 self.program_counter += 2;
             },
-            0xD000 ... 0xDFFF => {
+            0xD000 ..= 0xDFFF => {
                 let x: u8 = ((opcode & 0x0F00) >> 8) as u8;
                 let y: u8 = ((opcode & 0x00F0) >> 4) as u8;
                 let n: u8 = (opcode & 0x000F) as u8;
@@ -188,7 +188,7 @@ impl VirtualMachine {
                 }
                 self.program_counter += 2;
             },
-            0xE09E ... 0xEF9E => {
+            0xE09E ..= 0xEF9E => {
                 let x: u8 = ((opcode & 0x0F00) >> 8) as u8;
                 let key: u8 = self.registers[x as usize];
                 if self.keypad[key as usize] {
@@ -198,7 +198,7 @@ impl VirtualMachine {
                     self.program_counter += 2;
                 }
             },
-            0xE0A1 ... 0xEFA1 => {
+            0xE0A1 ..= 0xEFA1 => {
                 let x: u8 = ((opcode & 0x0F00) >> 8) as u8;
                 let key: u8 = self.registers[x as usize];
                 if !self.keypad[key as usize] {
@@ -208,12 +208,12 @@ impl VirtualMachine {
                     self.program_counter += 2;
                 }
             },
-            0xF007 ... 0xFF07 => {
+            0xF007 ..= 0xFF07 => {
                 let x: u8 = ((opcode & 0x0F00) >> 8) as u8;
                 self.delay_timer = self.registers[x as usize];
                 self.program_counter += 2;
             },
-            0xF00A ... 0xFF0A => {
+            0xF00A ..= 0xFF0A => {
                 let x: u8 = ((opcode & 0x0F00) >> 8) as u8;
                 let mut input_avail: bool = false;
                 for (i, input) in self.keypad.iter().enumerate() {
@@ -226,28 +226,28 @@ impl VirtualMachine {
                     self.program_counter += 2;
                 }
             },
-            0xF015 ... 0xFF15 => {
+            0xF015 ..= 0xFF15 => {
                 let x: u8 = ((opcode & 0x0F00) >> 8) as u8;
                 self.delay_timer = self.registers[x as usize];
                 self.program_counter += 2;
             },
-            0xF018 ... 0xFF18 => {
+            0xF018 ..= 0xFF18 => {
                 let x: u8 = ((opcode & 0x0F00) >> 8) as u8;
                 self.sound_timer = self.registers[x as usize];
                 self.program_counter += 2;
             },
-            0xF01E ... 0xFF1E => {
+            0xF01E ..= 0xFF1E => {
                 let x: u8 = ((opcode & 0x0F00) >> 8) as u8;
                 self.index_register += self.registers[x as usize] as u16;
                 self.program_counter += 2;
             },
-            0xF029 ... 0xFF29 => {
+            0xF029 ..= 0xFF29 => {
                 let x: u8 = ((opcode & 0x0F00) >> 8) as u8;
                 let ch: u8 = self.registers[x as usize];
                 self.index_register = self.memory[(ch * 5) as usize] as u16;
                 self.program_counter += 2;
             },
-            0xF033 ... 0xFF33 => {
+            0xF033 ..= 0xFF33 => {
                 let x: u8 = ((opcode & 0x0F00) >> 8) as u8;
                 let n: u8 = self.registers[x as usize];
                 self.memory[self.index_register as usize] = (n / 100) as u8;
@@ -255,14 +255,14 @@ impl VirtualMachine {
                 self.memory[(self.index_register + 2) as usize] = (n % 10) as u8;
                 self.program_counter += 2;
             },
-            0xF055 ... 0xFF55 => {
+            0xF055 ..= 0xFF55 => {
                 let x: u8 = ((opcode & 0x0F00) >> 8) as u8;
                 for i in 0 .. x + 1 {
                     self.memory[(self.index_register + i as u16) as usize] = self.registers[i as usize];
                 }
                 self.program_counter += 2;
             },
-            0xF065 ... 0xFF65 => {
+            0xF065 ..= 0xFF65 => {
                 let x: u8 = ((opcode & 0x0F00) >> 8) as u8;
                 for i in 0 .. x + 1 {
                     self.registers[i as usize] = self.memory[(self.index_register + i as u16) as usize];
@@ -351,4 +351,8 @@ pub fn get_chip8_fontset() -> [u8; 80] {
         0xF0, 0x80, 0xF0, 0x80, 0x80  // F
     ];
     chip8_fontset
+}
+
+pub fn main() {
+    
 }
