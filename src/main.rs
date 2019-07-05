@@ -338,6 +338,13 @@ pub fn get_registers() -> &'static [u8; 16] {
 }
 
 #[no_mangle]
+pub fn get_input() -> &'static [bool; 16] {
+    unsafe {
+        &CHIP8.keypad
+    }
+}
+
+#[no_mangle]
 pub fn get_chip8_fontset() -> [u8; 80] {
     let chip8_fontset: [u8; 80] = [
         0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
