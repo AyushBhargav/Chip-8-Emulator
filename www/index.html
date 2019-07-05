@@ -3,12 +3,30 @@
     <head>
         <meta charset="utf-8">
         <title>Chip-8</title>
-        <script src="index.js"></script>
+        <link href="https://fonts.googleapis.com/css?family=VT323&display=swap" rel="stylesheet"> 
+        <link rel="stylesheet" type="text/css" href="index.css" />
     </head>
     <body>
-        <div class="container">
-            <table>
-            </table>
+        <h1>
+            Chip-8
+        </h1>
+        <hr/>
+        <div>
+            <p>
+                Load ROM: <select id="roms_select">insert_rom</select>
+            </p>
         </div>
+        <canvas id="canvas">
+            Please use latest browser like Firefox.
+        </canvas>
+        <hr/>
+        <table id="register_table">
+            <tr>
+                <th>Register</th>
+                <th>Value</th>
+            </tr>
+        </table>
+        <hr/>
+        <script src="index.js"></script>
     </body>
 </html>
