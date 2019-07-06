@@ -1,4 +1,7 @@
 extern crate rand;
+extern crate console_error_panic_hook;
+
+use std::panic;
 
 use rand::Rng;
 
@@ -354,7 +357,7 @@ static mut CHIP8: VirtualMachine = VirtualMachine {
     sound_timer: 0,
     // Empty Stack.
     stack: [0; 16],
-    stack_top: -1,
+    stack_top: -1
 };
 
 #[no_mangle]
@@ -373,6 +376,7 @@ pub fn get_graphics() -> &'static [bool; 64 * 32] {
 
 #[no_mangle]
 pub fn get_memory() -> &'static [u8; 4096] {
+    console_error_panic_hook::set_once();
     unsafe {
         &CHIP8.memory
     }
@@ -415,6 +419,20 @@ pub fn play_sound() -> bool {
 }
 
 #[no_mangle]
+pub fn get_pc() -> u16 {
+    unsafe {
+        CHIP8.program_counter
+    }
+}
+
+#[no_mangle]
+pub fn get_ic() -> u16 {
+    unsafe {
+        CHIP8.index_register
+    }
+}
+
+#[no_mangle]
 pub fn get_chip8_fontset() -> [u8; 80] {
     let chip8_fontset: [u8; 80] = [
         0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
@@ -438,7 +456,7 @@ pub fn get_chip8_fontset() -> [u8; 80] {
 }
 
 pub fn main() {
-    
+
 }
 
 /**

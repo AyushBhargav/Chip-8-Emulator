@@ -5,11 +5,13 @@ fetch("./chip8.wasm")
     .then(Module => {
         let exports = Module.instance.exports;
         init(exports.memory, exports.get_chip8_fontset, exports.get_memory, exports.get_graphics
-            , exports.get_registers, exports.get_inputs, exports.decrement_counter, exports.play_sound, exports.cpu_cycle);
+            , exports.get_registers, exports.get_ic, exports.get_pc, exports.get_inputs, exports.decrement_counter, exports.play_sound, exports.cpu_cycle);
     });
 
 // When wasm has been loaded then initialize the program.
-let init = function(sharedMemory, get_chip8_fontset, get_memory, get_graphics, get_registers, get_inputs, decrement_counter, play_sound, cpu_cycle) {
+let init = function(sharedMemory, get_chip8_fontset, get_memory, get_graphics, get_registers, get_ic, get_pc, get_inputs, decrement_counter, play_sound, cpu_cycle) {
+    // Set Panic hook for rust for debugging.
+    // set_panic_hook();
     let memory = new Uint8Array(sharedMemory.buffer, get_memory(), 4096);
     let fontset = new Uint8Array(sharedMemory.buffer, get_chip8_fontset(), 80);
     let graphics = new Uint8Array(sharedMemory.buffer, get_graphics(), 64 * 32);
@@ -30,12 +32,13 @@ let init = function(sharedMemory, get_chip8_fontset, get_memory, get_graphics, g
     // Init for input.
     initInput(inputs);
 
+    console.log(memory);
     // Game Loop
     let loop = function() {
         for(let i = 0; i < 10; i++) {
             clearFrame(ctx);
             renderFrame(ctx, graphics);
-            showRegisters(registers);
+            showRegisters(registers, get_ic(), get_pc());
             if(play_sound()) {
                 console.log("Beep");
             }
@@ -46,7 +49,7 @@ let init = function(sharedMemory, get_chip8_fontset, get_memory, get_graphics, g
     }
 
     // TODO: Support for all roms.
-    let romPath = `./roms/jason.ch8`;
+    let romPath = `./roms/Maze.ch8`;
     fetch(romPath)
     .then(response => response.arrayBuffer())
     .then(buffer => {
@@ -87,12 +90,16 @@ let initInput = function(inputs) {
     };
 }
 
-let showRegisters = function(registers) {
+let showRegisters = function(registers, index_counter, program_counter) {
     for(let i = 0; i < 16; i++) {
         let v = document.getElementById(`V${i}`);
         v.innerText = registers[i];
     }
-}
+    let ic = document.getElementById("ic");
+    ic.innerHTML = index_counter;
+    let pc = document.getElementById("pc");
+    pc.innerHTML = program_counter;
+}   
 
 let clearFrame = function(ctx) {
     ctx.fillStyle = 'black';

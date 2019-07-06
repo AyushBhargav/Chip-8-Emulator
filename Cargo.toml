@@ -5,8 +5,20 @@ authors = ["ayush"]
 edition = "2018"
 
 [dependencies]
-rand = "0.7.0"
+rand = "0.6.1"
+console_error_panic_hook = { version = "0.1.1", optional = true }
+wasm-bindgen = "0.2"
+wee_alloc = { version = "0.4.2", optional = true }
 
 [lib]
 path = "src/main.rs"
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["console_error_panic_hook"]
+
+[dev-dependencies]
+wasm-bindgen-test = "0.2"
+
+[profile.release]
+opt-level = "s"
