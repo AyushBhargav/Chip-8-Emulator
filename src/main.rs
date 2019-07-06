@@ -154,15 +154,16 @@ impl VirtualMachine {
                         self.program_counter += 2;
                     },
                     0x7 => {
-                        let sub: u16 = (self.registers[y as usize] - self.registers[x as usize]) as u16;
+                        let borrow: bool = self.registers[x as usize] > self.registers[y as usize];
+                        let sub: u16 = self.registers[y as usize].wrapping_sub(self.registers[x as usize]) as u16;
                         self.registers[x as usize] = (sub & 0xFF) as u8;
-                        if sub > 0 {
-                            // Set carry register for no borrow.
-                            self.registers[self.vf as usize] = 0x1;
-                        }
-                        else {
+                        if borrow {
                             // Unset carry register for borrow.
                             self.registers[self.vf as usize] = 0x0;
+                        }
+                        else {
+                            // Set carry register for no borrow.
+                            self.registers[self.vf as usize] = 0x1;
                         }
                         self.program_counter += 2
                     },
@@ -618,5 +619,48 @@ mod tests {
         assert_eq!(test_chip.registers[0xF as usize], 0x1);
     }
 
-    
+    #[test]
+    fn right_shift_register() {
+        let mut test_chip: VirtualMachine = create_test_chip();
+        test_chip.program_counter = 0x500;
+        test_chip.registers[0x8 as usize] = 0xFE;
+        test_chip.registers[0xF as usize] = 0x1;
+        test_chip.execute_op(0x8846);
+        assert_eq!(test_chip.program_counter, 0x500 + 2);
+        assert_eq!(test_chip.registers[0x8 as usize], (0xFE >> 1) as u8);
+        assert_eq!(test_chip.registers[0xF as usize], 0x0);
+    }
+
+    #[test]
+    fn sub_reverse_register() {
+        let mut test_chip: VirtualMachine = create_test_chip();
+        test_chip.program_counter = 0x500;
+        // Carry Flag is set in case of borrow.
+        test_chip.registers[0x7 as usize] = 0xF4;
+        test_chip.registers[0x8 as usize] = 0xFF;
+        test_chip.execute_op(0x8787);
+        assert_eq!(test_chip.program_counter, 0x500 + 2);
+        assert_eq!(test_chip.registers[0x7 as usize], (0xFF - 0xF4) as u8);
+        assert_eq!(test_chip.registers[0xF as usize], 0x01);
+        // Carry Flag is set in case of no borrow
+         test_chip.registers[0x2 as usize] = 0x15;
+        test_chip.registers[0x3 as usize] = 0x11;
+        test_chip.execute_op(0x8237);
+        assert_eq!(test_chip.program_counter, 0x500 + 4);
+        assert_eq!(test_chip.registers[0x2 as usize], (0x11 - 0x15) as u8);
+        assert_eq!(test_chip.registers[0xF as usize], 0x0);
+    }
+
+    #[test]
+    fn left_shift_register() {
+        let mut test_chip: VirtualMachine = create_test_chip();
+        test_chip.program_counter = 0x500;
+        test_chip.registers[0x8 as usize] = 0xFE;
+        test_chip.registers[0xF as usize] = 0x0;
+        test_chip.execute_op(0x884E);
+        assert_eq!(test_chip.program_counter, 0x500 + 2);
+        assert_eq!(test_chip.registers[0x8 as usize], (0xFE << 1) as u8);
+        assert_eq!(test_chip.registers[0xF as usize], 0x1);
+    }
+
 }
