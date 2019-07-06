@@ -4,11 +4,12 @@ fetch("./chip8.wasm")
     .then(bytes => WebAssembly.instantiate(bytes))
     .then(Module => {
         let exports = Module.instance.exports;
-        init(exports.memory, exports.get_chip8_fontset, exports.get_memory, exports.get_graphics, exports.get_registers, exports.get_inputs, exports.cpu_cycle);
+        init(exports.memory, exports.get_chip8_fontset, exports.get_memory, exports.get_graphics
+            , exports.get_registers, exports.get_inputs, exports.decrement_counter, exports.play_sound, exports.cpu_cycle);
     });
 
 // When wasm has been loaded then initialize the program.
-let init = function(sharedMemory, get_chip8_fontset, get_memory, get_graphics, get_registers, get_inputs, cpu_cycle) {
+let init = function(sharedMemory, get_chip8_fontset, get_memory, get_graphics, get_registers, get_inputs, decrement_counter, play_sound, cpu_cycle) {
     let memory = new Uint8Array(sharedMemory.buffer, get_memory(), 4096);
     let fontset = new Uint8Array(sharedMemory.buffer, get_chip8_fontset(), 80);
     let graphics = new Uint8Array(sharedMemory.buffer, get_graphics(), 64 * 32);
@@ -35,10 +36,13 @@ let init = function(sharedMemory, get_chip8_fontset, get_memory, get_graphics, g
             clearFrame(ctx);
             renderFrame(ctx, graphics);
             showRegisters(registers);
+            if(play_sound()) {
+                console.log("Beep");
+            }
             cpu_cycle();
         }
-        console.log("RAM", memory);
-        // window.requestAnimationFrame(loop);
+        decrement_counter();
+        window.requestAnimationFrame(loop);
     }
 
     // TODO: Support for all roms.

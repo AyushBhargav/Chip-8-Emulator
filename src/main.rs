@@ -176,7 +176,7 @@ impl VirtualMachine {
                 }
             },
             // Skip next instruction if Vx is not equal to Vy.
-            0x9000 ..= 0x9FFF => {
+            0x9000 ..= 0x9FF0 => {
                 let x: u8 = ((opcode & 0xFFF) >> 8) as u8;
                 let y: u8 = ((opcode & 0xFF) >> 4) as u8;
                 if self.registers[x as usize] != self.registers[y as usize] {
@@ -222,86 +222,100 @@ impl VirtualMachine {
                 }
                 self.program_counter += 2;
             },
-            0xE09E ..= 0xEF9E => {
-                let x: u8 = ((opcode & 0x0F00) >> 8) as u8;
-                let key: u8 = self.registers[x as usize];
-                if self.keypad[key as usize] {
-                    self.program_counter += 4;
-                }
-                else {
-                    self.program_counter += 2;
-                }
-            },
-            0xE0A1 ..= 0xEFA1 => {
-                let x: u8 = ((opcode & 0x0F00) >> 8) as u8;
-                let key: u8 = self.registers[x as usize];
-                if !self.keypad[key as usize] {
-                    self.program_counter += 4;
-                }
-                else {
-                    self.program_counter += 2;
-                }
-            },
-            0xF007 ..= 0xFF07 => {
-                let x: u8 = ((opcode & 0x0F00) >> 8) as u8;
-                self.delay_timer = self.registers[x as usize];
-                self.program_counter += 2;
-            },
-            0xF00A ..= 0xFF0A => {
-                let x: u8 = ((opcode & 0x0F00) >> 8) as u8;
-                let mut input_avail: bool = false;
-                for (i, input) in self.keypad.iter().enumerate() {
-                    if *input {
-                        input_avail = true;
-                        self.registers[x as usize] = i as u8;
+            0xE000 ..= 0xEFFF => {
+                match opcode & 0x00FF {
+                    0x9E => {
+                        let x: u8 = ((opcode & 0x0F00) >> 8) as u8;
+                        let key: u8 = self.registers[x as usize];
+                        if self.keypad[key as usize] {
+                            self.program_counter += 4;
+                        }
+                        else {
+                            self.program_counter += 2;
+                        }
+                    },
+                    0xA1 => {
+                        let x: u8 = ((opcode & 0x0F00) >> 8) as u8;
+                        let key: u8 = self.registers[x as usize];
+                        if !self.keypad[key as usize] {
+                            self.program_counter += 4;
+                        }
+                        else {
+                            self.program_counter += 2;
+                        }
+                    },
+                    _ => {
+                        panic!("Unsupported Key operation.");
                     }
                 }
-                if input_avail {
-                    self.program_counter += 2;
+            },
+            0xF000 ..= 0xFFFF => {
+                match opcode & 0x00FF {
+                    0x07 => {
+                        let x: u8 = ((opcode & 0x0F00) >> 8) as u8;
+                        self.registers[x as usize] = self.delay_timer;
+                        self.program_counter += 2;
+                    },
+                    0x0A => {
+                        let x: u8 = ((opcode & 0x0F00) >> 8) as u8;
+                        let mut input_avail: bool = false;
+                        for (i, input) in self.keypad.iter().enumerate() {
+                            if *input {
+                                input_avail = true;
+                                self.registers[x as usize] = i as u8;
+                            }
+                        }
+                        if input_avail {
+                            self.program_counter += 2;
+                        }
+                    },
+                    0x15 => {
+                        let x: u8 = ((opcode & 0x0F00) >> 8) as u8;
+                        self.delay_timer = self.registers[x as usize];
+                        self.program_counter += 2;
+                    },
+                    0x18 => {
+                        let x: u8 = ((opcode & 0x0F00) >> 8) as u8;
+                        self.sound_timer = self.registers[x as usize];
+                        self.program_counter += 2;
+                    },
+                    0x1E => {
+                        let x: u8 = ((opcode & 0x0F00) >> 8) as u8;
+                        self.index_register += self.registers[x as usize] as u16;
+                        self.program_counter += 2;
+                    },
+                    0x29 => {
+                        let x: u8 = ((opcode & 0x0F00) >> 8) as u8;
+                        let ch: u8 = self.registers[x as usize];
+                        self.index_register = (ch * 5) as u16;
+                        self.program_counter += 2;
+                    },
+                    0x33 => {
+                        let x: u8 = ((opcode & 0x0F00) >> 8) as u8;
+                        let n: u8 = self.registers[x as usize];
+                        self.memory[self.index_register as usize] = (n / 100) as u8;
+                        self.memory[(self.index_register + 1) as usize] = ((n / 10) % 10) as u8;
+                        self.memory[(self.index_register + 2) as usize] = (n % 10) as u8;
+                        self.program_counter += 2;
+                    },
+                    0x55 => {
+                        let x: u8 = ((opcode & 0x0F00) >> 8) as u8;
+                        for i in 0 .. x + 1 {
+                            self.memory[(self.index_register + i as u16) as usize] = self.registers[i as usize];
+                        }
+                        self.program_counter += 2;
+                    },
+                    0x65 => {
+                        let x: u8 = ((opcode & 0x0F00) >> 8) as u8;
+                        for i in 0 .. x + 1 {
+                            self.registers[i as usize] = self.memory[(self.index_register + i as u16) as usize];
+                        }
+                        self.program_counter += 2;
+                    }
+                    _ => {
+                        panic!("Unsupported memory/sound/timer operation");
+                    }
                 }
-            },
-            0xF015 ..= 0xFF15 => {
-                let x: u8 = ((opcode & 0x0F00) >> 8) as u8;
-                self.delay_timer = self.registers[x as usize];
-                self.program_counter += 2;
-            },
-            0xF018 ..= 0xFF18 => {
-                let x: u8 = ((opcode & 0x0F00) >> 8) as u8;
-                self.sound_timer = self.registers[x as usize];
-                self.program_counter += 2;
-            },
-            0xF01E ..= 0xFF1E => {
-                let x: u8 = ((opcode & 0x0F00) >> 8) as u8;
-                self.index_register += self.registers[x as usize] as u16;
-                self.program_counter += 2;
-            },
-            0xF029 ..= 0xFF29 => {
-                let x: u8 = ((opcode & 0x0F00) >> 8) as u8;
-                let ch: u8 = self.registers[x as usize];
-                self.index_register = self.memory[(ch * 5) as usize] as u16;
-                self.program_counter += 2;
-            },
-            0xF033 ..= 0xFF33 => {
-                let x: u8 = ((opcode & 0x0F00) >> 8) as u8;
-                let n: u8 = self.registers[x as usize];
-                self.memory[self.index_register as usize] = (n / 100) as u8;
-                self.memory[(self.index_register + 1) as usize] = ((n / 10) % 10) as u8;
-                self.memory[(self.index_register + 2) as usize] = (n % 10) as u8;
-                self.program_counter += 2;
-            },
-            0xF055 ..= 0xFF55 => {
-                let x: u8 = ((opcode & 0x0F00) >> 8) as u8;
-                for i in 0 .. x + 1 {
-                    self.memory[(self.index_register + i as u16) as usize] = self.registers[i as usize];
-                }
-                self.program_counter += 2;
-            },
-            0xF065 ..= 0xFF65 => {
-                let x: u8 = ((opcode & 0x0F00) >> 8) as u8;
-                for i in 0 .. x + 1 {
-                    self.registers[i as usize] = self.memory[(self.index_register + i as u16) as usize];
-                }
-                self.program_counter += 2;
             },
             _ => {
                 panic!("Can't recognize parsed opcode: {}", opcode);
@@ -375,6 +389,28 @@ pub fn get_registers() -> &'static [u8; 16] {
 pub fn get_inputs() -> &'static [bool; 16] {
     unsafe {
         &CHIP8.keypad
+    }
+}
+
+#[no_mangle]
+pub fn decrement_counter() {
+    unsafe {
+        if CHIP8.delay_timer > 0 {
+            CHIP8.delay_timer -= 1;
+        }
+        if CHIP8.sound_timer > 0 {
+            CHIP8.sound_timer -= 1;
+        }
+    }
+}
+
+#[no_mangle]
+pub fn play_sound() -> bool {
+    unsafe {
+        if CHIP8.sound_timer > 0 {
+            return true;
+        }
+        false
     }
 }
 
@@ -661,6 +697,196 @@ mod tests {
         assert_eq!(test_chip.program_counter, 0x500 + 2);
         assert_eq!(test_chip.registers[0x8 as usize], (0xFE << 1) as u8);
         assert_eq!(test_chip.registers[0xF as usize], 0x1);
+    }
+
+    #[test]
+    fn skip_neq_registers() {
+        let mut test_chip: VirtualMachine = create_test_chip();
+        test_chip.program_counter = 0x500;
+        // Skips next instruction.
+        test_chip.registers[0x8 as usize] = 0xFE;
+        test_chip.registers[0x9 as usize] = 0xFF;
+        test_chip.execute_op(0x9890);
+        assert_eq!(test_chip.program_counter, 0x500 + 4);
+        // Doesn't skip next instruction.
+        test_chip.registers[0x4 as usize] = 0xFF;
+        test_chip.registers[0x5 as usize] = 0xFF;
+        test_chip.execute_op(0x9450);
+        assert_eq!(test_chip.program_counter, 0x500 + 4 + 2);
+    }
+
+    #[test]
+    fn set_index_reg() {
+        let mut test_chip: VirtualMachine = create_test_chip();
+        test_chip.program_counter = 0x500;
+        test_chip.execute_op(0xAF8A);
+        assert_eq!(test_chip.program_counter, 0x500 + 2);
+        assert_eq!(test_chip.index_register, 0xF8A);
+    }
+
+    #[test]
+    fn jump_address() {
+        let mut test_chip: VirtualMachine = create_test_chip();
+        test_chip.program_counter = 0x500;
+        test_chip.registers[0x0 as usize] = 0x56;
+        test_chip.execute_op(0xB777);
+        assert_eq!(test_chip.program_counter, 0x56 + 0x777);
+    }
+
+    #[test]
+    fn set_random_register() {
+        let mut test_chip: VirtualMachine = create_test_chip();
+        test_chip.program_counter = 0x500;
+        test_chip.execute_op(0xC5FF);
+        test_chip.execute_op(0xC6FF);
+        assert_eq!(test_chip.program_counter, 0x500 + 4);
+        assert_ne!(test_chip.registers[0x5 as usize], test_chip.registers[0x6 as usize]);
+    }
+
+    #[test]
+    fn display_sprite() {
+        let mut test_chip: VirtualMachine = create_test_chip();
+        test_chip.program_counter = 0x500;
+        test_chip.registers[0x6 as usize] = 0xF;
+        test_chip.registers[0x7 as usize] = 0x6;
+        test_chip.index_register = 0x899;
+        test_chip.memory[0x899 + 0] = 0xC6;
+        test_chip.memory[0x899 + 1] = 0xFF;
+        test_chip.execute_op(0xD672);
+        // TODO: Test for video graphics
+    }
+
+    #[test]
+    fn skip_key_press() {
+        let mut test_chip: VirtualMachine = create_test_chip();
+        test_chip.program_counter = 0x500;
+        test_chip.registers[0x3 as usize] = 0x0A;
+        test_chip.keypad[0x0A as usize] = true;
+        test_chip.execute_op(0xE39E);
+        assert_eq!(test_chip.program_counter, 0x500 + 4);
+        test_chip.keypad[0x0A as usize] = false;
+        test_chip.execute_op(0xE39E);
+        assert_eq!(test_chip.program_counter, 0x500 + 4 + 2);
+    }
+
+    #[test]
+    fn skip_key_not_pressed() {
+        let mut test_chip: VirtualMachine = create_test_chip();
+        test_chip.program_counter = 0x500;
+        test_chip.registers[0x3 as usize] = 0x0A;
+        test_chip.keypad[0x0A as usize] = true;
+        test_chip.execute_op(0xE3A1);
+        assert_eq!(test_chip.program_counter, 0x500 + 2);
+        test_chip.keypad[0x0A as usize] = false;
+        test_chip.execute_op(0xE3A1);
+        assert_eq!(test_chip.program_counter, 0x500 + 2 + 4);
+    }
+
+    #[test]
+    fn set_delay_register() {
+        let mut test_chip: VirtualMachine = create_test_chip();
+        test_chip.program_counter = 0x500;
+        test_chip.delay_timer = 0xFB;
+        test_chip.execute_op(0xF207);
+        assert_eq!(test_chip.program_counter, 0x500 + 2);
+        assert_eq!(test_chip.registers[0x2 as usize], 0xFB);
+    }
+
+    #[test]
+    fn set_key_register() {
+        let mut test_chip: VirtualMachine = create_test_chip();
+        test_chip.program_counter = 0x500;
+        // Blocking execution.
+        test_chip.execute_op(0xF80A);
+        assert_eq!(test_chip.program_counter, 0x500);
+        // Should resume execution.
+        test_chip.keypad[0x7] = true;
+        test_chip.execute_op(0xF80A);
+        assert_eq!(test_chip.program_counter, 0x500 + 2);
+        assert_eq!(test_chip.registers[0x8 as usize], 0x7);
+    }
+
+    #[test]
+    fn set_delay_timer() {
+        let mut test_chip: VirtualMachine = create_test_chip();
+        test_chip.program_counter = 0x500;
+        test_chip.registers[0x7] = 0x56;
+        test_chip.execute_op(0xF715);
+        assert_eq!(test_chip.program_counter, 0x500 + 2);
+        assert_eq!(test_chip.delay_timer, 0x56);
+    }
+
+    #[test]
+    fn set_sound_timer() {
+        let mut test_chip: VirtualMachine = create_test_chip();
+        test_chip.program_counter = 0x500;
+        test_chip.registers[0x7] = 0x56;
+        test_chip.execute_op(0xF718);
+        assert_eq!(test_chip.program_counter, 0x500 + 2);
+        assert_eq!(test_chip.sound_timer, 0x56);
+    }
+
+    #[test]
+    fn increment_index_register() {
+        let mut test_chip: VirtualMachine = create_test_chip();
+        test_chip.program_counter = 0x500;
+        test_chip.registers[0x7] = 0x56;
+        test_chip.index_register = 0x78;
+        test_chip.execute_op(0xF71E);
+        assert_eq!(test_chip.program_counter, 0x500 + 2);
+        assert_eq!(test_chip.index_register, 0x56 + 0x78);
+    }
+
+    #[test]
+    fn set_sprite_addr_index_register() {
+        let mut test_chip: VirtualMachine = create_test_chip();
+        test_chip.program_counter = 0x500;
+        test_chip.registers[0x7] = 0x5;
+        test_chip.execute_op(0xF729);
+        assert_eq!(test_chip.program_counter, 0x500 + 2);
+        assert_eq!(test_chip.index_register, 25);
+    }
+
+    #[test]
+    fn bcd() {
+        let mut test_chip: VirtualMachine = create_test_chip();
+        test_chip.program_counter = 0x500;
+        test_chip.registers[0 as usize] = 243;
+        test_chip.execute_op(0xF033);
+        assert_eq!(test_chip.program_counter, 0x500 + 2);
+        assert_eq!(test_chip.memory[test_chip.index_register as usize], 2);
+        assert_eq!(test_chip.memory[(test_chip.index_register + 1) as usize], 4);
+        assert_eq!(test_chip.memory[(test_chip.index_register + 2) as usize], 3);
+    }
+
+    #[test]
+    fn register_dump() {
+        let mut test_chip: VirtualMachine = create_test_chip();
+        test_chip.program_counter = 0x500;
+        for i in 0 .. 5 {
+            test_chip.registers[i as usize] = (i + 1) as u8;
+        }
+        test_chip.index_register = 0x300;
+        test_chip.execute_op(0xF455);
+        assert_eq!(test_chip.program_counter, 0x500 + 2);
+        for i in 0 .. 5 {
+            assert_eq!(test_chip.memory[(test_chip.index_register + i) as usize], (i + 1) as u8);
+        }
+    }
+
+    #[test]
+    fn register_load() {
+        let mut test_chip: VirtualMachine = create_test_chip();
+        test_chip.program_counter = 0x500;
+        test_chip.index_register = 0x300;
+        for i in 0 .. 5 {
+            test_chip.memory[(test_chip.index_register + i) as usize] = (i + 1) as u8;
+        }
+        test_chip.execute_op(0xF465);
+        assert_eq!(test_chip.program_counter, 0x500 + 2);
+        for i in 0 .. 5 {
+            assert_eq!(test_chip.registers[i as usize], (i + 1) as u8);
+        }
     }
 
 }
