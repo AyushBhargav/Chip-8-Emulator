@@ -34,13 +34,24 @@ impl VirtualMachine {
 
     fn execute_op(&mut self, opcode: u16) {
         match opcode {
+            // TODO: RCA 1802 call for 0NNN opcode.
+            // Clear Screen
+            0x00E0 => {
+                self.video = [false; 64 * 32];
+                self.program_counter += 2;
+            },
+            // Return from subroutine
+            0x00EE => {
+                self.program_counter = self.stack[self.stack_top as usize] + 2;
+                self.stack_top -= 1;
+            },
             // Jump statement.
             0x1000 ..= 0x1FFF => self.program_counter = opcode & 0xFFF,
             // Call the subroutine statement.
             0x2000 ..= 0x2FFF => {
-                self.stack[self.stack_top as usize] = self.program_counter;
                 self.stack_top += 1;
-                self.program_counter = opcode * 0xFFF;
+                self.stack[self.stack_top as usize] = self.program_counter;
+                self.program_counter = opcode & 0xFFF;
             },
             // Skip next instruction if given register equals the operand.
             0x3000 ..= 0x3FFF => {
@@ -48,6 +59,9 @@ impl VirtualMachine {
                 let vx: u8 = self.registers[x as usize];
                 if vx == (opcode & 0xFF) as u8 {
                     self.program_counter += 4; // Skip 4 bytes.
+                }
+                else {
+                    self.program_counter += 2; // Skip 2 bytes.
                 }
             },
             // Skip next instruction if given register doesn't equal the operand.
@@ -57,15 +71,21 @@ impl VirtualMachine {
                 if vx != (opcode & 0xFF) as u8 {
                     self.program_counter += 4; // Skip 4 bytes.
                 }
+                else {
+                    self.program_counter += 2; // Skip 2 bytes.
+                }
             },
-            // Skip next instruction if given registers aren't equal.
-            0x5000 ..= 0x5FFF => {
+            // Skip next instruction if given registers are equal.
+            0x5000 ..= 0x5FF0 => {
                 let x: u8 = ((opcode & 0xF00) >> 8) as u8;
                 let vx: u8 = self.registers[x as usize];
                 let y: u8 = ((opcode & 0xF0) >> 4) as u8;
                 let vy: u8 = self.registers[y as usize];
                 if vx == vy {
                     self.program_counter += 4; // Skip 4 bytes.
+                }
+                else {
+                    self.program_counter += 2; // Skip 2 bytes.
                 }
             },
             // Set given operand to specified register.
@@ -77,7 +97,7 @@ impl VirtualMachine {
             // Add given operand to specified register.
             0x7000 ..= 0x7FFF => {
                 let x: u8 = ((opcode & 0xF00) >> 8) as u8;
-                self.registers[x as usize] += (opcode & 0xFF) as u8;
+                self.registers[x as usize] = self.registers[x as usize].wrapping_add((opcode & 0xFF) as u8);
                 self.program_counter += 2;
             },
             // Register manipulation.
@@ -85,12 +105,24 @@ impl VirtualMachine {
                 let x: u8 = ((opcode & 0xF00) >> 8) as u8;
                 let y: u8 = ((opcode & 0xF0) as u8) >> 4;
                 match opcode & 0xF {
-                    0x0 => self.registers[x as usize] = self.registers[y as usize],
-                    0x1 => self.registers[x as usize] |= self.registers[y as usize],
-                    0x2 => self.registers[x as usize] &= self.registers[y as usize],
-                    0x3 => self.registers[x as usize] ^= self.registers[y as usize],
+                    0x0 => {
+                        self.registers[x as usize] = self.registers[y as usize];
+                        self.program_counter += 2;
+                    },
+                    0x1 => {
+                        self.registers[x as usize] |= self.registers[y as usize];
+                        self.program_counter += 2;
+                    },
+                    0x2 => {
+                        self.registers[x as usize] &= self.registers[y as usize];
+                        self.program_counter += 2;
+                    },
+                    0x3 => {
+                        self.registers[x as usize] ^= self.registers[y as usize];
+                        self.program_counter += 2;
+                    },
                     0x4 => {
-                        let sum: u16 = (self.registers[x as usize] + self.registers[y as usize]) as u16;
+                        let sum: u16 = self.registers[x as usize] as u16 + self.registers[y as usize] as u16;
                         self.registers[x as usize] = (sum & 0xFF) as u8;
                         if sum > 0xFF {
                             // Set carry register.
@@ -103,15 +135,16 @@ impl VirtualMachine {
                         self.program_counter += 2;
                     },
                     0x5 => {
-                        let sub: u16 = (self.registers[x as usize] - self.registers[y as usize]) as u16;
+                        let borrow: bool = self.registers[x as usize] < self.registers[y as usize];
+                        let sub: i16 = (self.registers[x as usize].wrapping_sub(self.registers[y as usize])) as i16;
                         self.registers[x as usize] = (sub & 0xFF) as u8;
-                        if sub > 0 {
-                            // Set carry register for no borrow.
-                            self.registers[self.vf as usize] = 0x1;
-                        }
-                        else {
+                        if borrow {
                             // Unset carry register for borrow.
                             self.registers[self.vf as usize] = 0x0;
+                        }
+                        else {
+                            // Set carry register for no borrow.
+                            self.registers[self.vf as usize] = 0x1;
                         }
                         self.program_counter += 2;
                     },
@@ -338,7 +371,7 @@ pub fn get_registers() -> &'static [u8; 16] {
 }
 
 #[no_mangle]
-pub fn get_input() -> &'static [bool; 16] {
+pub fn get_inputs() -> &'static [bool; 16] {
     unsafe {
         &CHIP8.keypad
     }
@@ -368,5 +401,222 @@ pub fn get_chip8_fontset() -> [u8; 80] {
 }
 
 pub fn main() {
+    
+}
+
+/**
+ * Unit tests for Chip-8 Operations
+ */
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn create_test_chip() -> VirtualMachine {
+        VirtualMachine {
+            memory: [0; 4096],
+            registers: [0; 16],
+            index_register: 0,
+            vf: 15,
+            // Programs start at memory location of 0x200.
+            program_counter: 0x200,
+            // Blank screen at the start.
+            video: [false; 64 * 32],
+            keypad: [false; 16],
+            delay_timer: 0,
+            sound_timer: 0,
+            // Empty Stack.
+            stack: [0; 16],
+            stack_top: -1,
+        }
+    }
+
+    #[test]
+    fn clear_screen() {
+        let mut test_chip: VirtualMachine = create_test_chip();
+        test_chip.video = [true; 64 * 32];
+        test_chip.execute_op(0x00E0); 
+        assert!(!test_chip.video.contains(&true), "Video buffer wasn't cleared.");
+        assert_eq!(test_chip.program_counter, 0x200 + 2, "Testing if program_counter was incremented.");
+    }
+
+    #[test]
+    fn return_from_function() {
+        let mut test_chip: VirtualMachine = create_test_chip();
+        test_chip.stack[5] = 0x5000;
+        test_chip.stack_top = 5;
+        test_chip.execute_op(0x00EE);
+        assert_eq!(test_chip.program_counter, 0x5000 + 2, "Testing program counter-{} equals to {}", test_chip.program_counter, 0x5000 + 2);
+        assert_eq!(test_chip.stack_top, 4, "Testing tack top counter-{} equals to {}", test_chip.stack_top, 4);
+    }
+
+    #[test]
+    fn jump() {
+        let mut test_chip: VirtualMachine = create_test_chip();
+        test_chip.execute_op(0x19AB);
+        assert_eq!(test_chip.program_counter, 0x9AB, "Testing program_counter {} equals {}", test_chip.program_counter, 0x9AB);
+    }
+
+    #[test]
+    fn call_subroutine() {
+        let mut test_chip: VirtualMachine = create_test_chip();
+        test_chip.program_counter = 0x500;
+        test_chip.stack_top = 3;
+        test_chip.execute_op(0x2187);
+        assert_eq!(test_chip.program_counter, 0x187, "Testing program_counter {} equals {}", test_chip.program_counter, 0x187);
+        assert_eq!(test_chip.stack[test_chip.stack_top as usize], 0x500, "Testing stack top counter {} equals {}", test_chip.stack[test_chip.stack_top as usize], 0x500);
+
+    }
+
+    #[test]
+    fn skip_instr_eq() {
+        let mut test_chip: VirtualMachine = create_test_chip();
+        test_chip.program_counter = 0x500;
+        // Skipping
+        test_chip.registers[0xB as usize] = 0x78;
+        test_chip.execute_op(0x3B78);
+        assert_eq!(test_chip.program_counter, 0x500 + 4);
+
+        // Not skipping
+        test_chip.registers[0x5 as usize] = 0x67;
+        test_chip.execute_op(0x3576);
+        assert_eq!(test_chip.program_counter, 0x500 + 4 + 2);
+    }
+
+    #[test]
+    fn skip_instr_neq() {
+        let mut test_chip: VirtualMachine = create_test_chip();
+        test_chip.program_counter = 0x500;
+        // Not skipping
+        test_chip.registers[0xB as usize] = 0x78;
+        test_chip.execute_op(0x4B78);
+        assert_eq!(test_chip.program_counter, 0x500 + 2);
+
+        // Skipping
+        test_chip.registers[0x5 as usize] = 0x67;
+        test_chip.execute_op(0x4576);
+        assert_eq!(test_chip.program_counter, 0x500 + 4 + 2);
+    }
+
+    #[test]
+    fn skip_instr_reg_eq() {
+        let mut test_chip: VirtualMachine = create_test_chip();
+        test_chip.program_counter = 0x500;
+        // Skipping
+        test_chip.registers[0xB as usize] = 0x78;
+        test_chip.registers[0x5 as usize] = 0x78;
+        test_chip.execute_op(0x5B50);
+        assert_eq!(test_chip.program_counter, 0x500 + 4);
+
+        // Not skipping
+        test_chip.registers[0xC as usize] = 0x67;
+        test_chip.registers[0x6 as usize] = 0x66;
+        test_chip.execute_op(0x5C60);
+        assert_eq!(test_chip.program_counter, 0x500 + 4 + 2);
+    }
+
+    #[test]
+    fn set_register() {
+        let mut test_chip: VirtualMachine = create_test_chip();
+        test_chip.program_counter = 0x500;
+        test_chip.execute_op(0x6A57);
+        assert_eq!(test_chip.program_counter, 0x500 + 2);
+        assert_eq!(test_chip.registers[0xA as usize], 0x57);
+    }
+
+    #[test]
+    fn add_register() {
+        let mut test_chip: VirtualMachine = create_test_chip();
+        test_chip.program_counter = 0x500;
+        test_chip.registers[0x4 as usize] = 0x99;
+        test_chip.execute_op(0x7478);
+        assert_eq!(test_chip.program_counter, 0x500 + 2);
+        assert_eq!(test_chip.registers[0x4 as usize], ((0x99 + 0x78) & 0xFF) as u8);
+        assert_eq!(test_chip.registers[0xF as usize], 0x0);
+    }
+
+    #[test]
+    fn assign_registers() {
+        let mut test_chip: VirtualMachine = create_test_chip();
+        test_chip.program_counter = 0x500;
+        test_chip.registers[0x7 as usize] = 0x45;
+        test_chip.registers[0x8 as usize] = 0x5E;
+        test_chip.execute_op(0x8780);
+        assert_eq!(test_chip.program_counter, 0x500 + 2);
+        assert_eq!(test_chip.registers[0x7 as usize], 0x5E);
+    }
+
+    #[test]
+    fn or_registers() {
+        let mut test_chip: VirtualMachine = create_test_chip();
+        test_chip.program_counter = 0x500;
+        test_chip.registers[0x7 as usize] = 0x45;
+        test_chip.registers[0x8 as usize] = 0x5E;
+        test_chip.execute_op(0x8781);
+        assert_eq!(test_chip.program_counter, 0x500 + 2);
+        assert_eq!(test_chip.registers[0x7 as usize], 0x45 | 0x5E);
+    }
+
+    #[test]
+    fn and_registers() {
+        let mut test_chip: VirtualMachine = create_test_chip();
+        test_chip.program_counter = 0x500;
+        test_chip.registers[0x7 as usize] = 0x45;
+        test_chip.registers[0x8 as usize] = 0x5E;
+        test_chip.execute_op(0x8782);
+        assert_eq!(test_chip.program_counter, 0x500 + 2);
+        assert_eq!(test_chip.registers[0x7 as usize], 0x45 & 0x5E);
+    }
+
+    #[test]
+    fn xor_registers() {
+        let mut test_chip: VirtualMachine = create_test_chip();
+        test_chip.program_counter = 0x500;
+        test_chip.registers[0x7 as usize] = 0x45;
+        test_chip.registers[0x8 as usize] = 0x5E;
+        test_chip.execute_op(0x8783);
+        assert_eq!(test_chip.program_counter, 0x500 + 2);
+        assert_eq!(test_chip.registers[0x7 as usize], 0x45 ^ 0x5E);
+    }
+
+    #[test]
+    fn add_registers() {
+        let mut test_chip: VirtualMachine = create_test_chip();
+        test_chip.program_counter = 0x500;
+        // Carry Flag is set
+        test_chip.registers[0x7 as usize] = 0xF4;
+        test_chip.registers[0x8 as usize] = 0xFF;
+        test_chip.execute_op(0x8784);
+        assert_eq!(test_chip.program_counter, 0x500 + 2);
+        assert_eq!(test_chip.registers[0x7 as usize], (0xF4 + 0xFF) as u8);
+        assert_eq!(test_chip.registers[0xF as usize], 0x1);
+        // Carry Flag is unset
+         test_chip.registers[0x2 as usize] = 0x15;
+        test_chip.registers[0x3 as usize] = 0x15;
+        test_chip.execute_op(0x8234);
+        assert_eq!(test_chip.program_counter, 0x500 + 4);
+        assert_eq!(test_chip.registers[0x2 as usize], (0x15 + 0x15) as u8);
+        assert_eq!(test_chip.registers[0xF as usize], 0x0);
+    }
+
+    #[test]
+    fn sub_registers() {
+        let mut test_chip: VirtualMachine = create_test_chip();
+        test_chip.program_counter = 0x500;
+        // Carry Flag is unset in case of borrow.
+        test_chip.registers[0x7 as usize] = 0xF4;
+        test_chip.registers[0x8 as usize] = 0xFF;
+        test_chip.execute_op(0x8785);
+        assert_eq!(test_chip.program_counter, 0x500 + 2);
+        assert_eq!(test_chip.registers[0x7 as usize], (0xF4 - 0xFF) as u8);
+        assert_eq!(test_chip.registers[0xF as usize], 0x0);
+        // Carry Flag is set in case of no borrow
+         test_chip.registers[0x2 as usize] = 0x15;
+        test_chip.registers[0x3 as usize] = 0x11;
+        test_chip.execute_op(0x8235);
+        assert_eq!(test_chip.program_counter, 0x500 + 4);
+        assert_eq!(test_chip.registers[0x2 as usize], (0x15 - 0x11) as u8);
+        assert_eq!(test_chip.registers[0xF as usize], 0x1);
+    }
+
     
 }

@@ -13,9 +13,8 @@ let init = function(sharedMemory, get_chip8_fontset, get_memory, get_graphics, g
     let fontset = new Uint8Array(sharedMemory.buffer, get_chip8_fontset(), 80);
     let graphics = new Uint8Array(sharedMemory.buffer, get_graphics(), 64 * 32);
     let registers = new Uint8Array(sharedMemory.buffer, get_registers(), 16);
-    let inputs = new Uint8Array(sharedMemory.buffer, get_inputs, 16);
+    let inputs = new Uint8Array(sharedMemory.buffer, get_inputs(), 16);
 
-    graphics[6] = true;
     // Setting up canvas to draw.
     let canvas = document.getElementById('canvas');
     let ctx = canvas.getContext('2d');
