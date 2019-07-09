@@ -36,15 +36,35 @@ class CPU:
         instr = self._get_instr()
         # Really long if else ladder now.
         if instr == 0x00E0:
-            _clear_screen()
+            self._clear_screen()
         elif instr == 0x00EE:
-            _return_subroutine()
+            self._return_subroutine()
         elif 0x1000 <= instr <= 0x1FFF:
-            _goto_address(instr)
+            self._goto_address(instr)
         elif 0x2000 <= instr <= 0x2FFF:
-            _call_subroutine(instr)
+            self._call_subroutine(instr)
         elif 0x3000 <= instr <= 0x3FFF:
-            _skip_if_eq_num(instr)
+            self._skip_if_eq_num(instr)
+        elif 0x4000 <= instr <= 0x4FFF:
+            self._skip_if_neq_num(instr)
+        elif 0x5000 <= instr <= 0x5FF0:
+            self._skip_if_eq_reg(instr)
+        elif 0x6000 <= instr <= 0x6FFF:
+            self._set_reg_num(instr)
+        elif 0x7000 <= instr <= 0x7FFF:
+            self._add_reg_num(instr)
+        elif 0x8000 <= instr <= 0x8FF0:
+            self._assign_reg(instr)
+        elif 0x8001 <= instr <= 0x8FF1:
+            self._or_reg(instr)
+        elif 0x8002 <= instr <= 0x8FF2:
+            self._and_reg(instr)
+        elif 0x8003 <= instr <= 0x8FF3:
+            self._xor_reg(instr)
+        elif 0x8004 <= instr <= 0x8FF4:
+            self._add_regs(instr)
+        elif 0x8005 <= instr <= 0x8FF5:
+            self._sub_regs(instr)
         else:
             raise Exception("Wrong opcode: " + str(instr))
 
@@ -79,3 +99,85 @@ class CPU:
             self.pc += 4
         else:
             self.pc += 2
+
+    def _skip_if_neq_num(self, instr):
+        x = self._get_nibbles[1]
+        n = instr & 0x00FF
+        if self.reg[x] != n:
+            # Skip
+            self.pc += 4
+        else:
+            self.pc += 2
+
+    def _skip_if_eq_reg(self, instr):
+        x = self._get_nibbles[1]
+        y = self._get_nibbles[2]
+        if self.reg[x] == self.reg[y]:
+            # Skip
+            self.pc += 4
+        else:
+            self.pc += 2
+
+    def _set_reg_num(self, instr):
+        x = self._get_nibbles[1]
+        n = instr & 0x00FF
+        self.reg[x] = n
+        self.pc += 2
+
+    def _add_reg_num(self, instr):
+        x = self._get_nibbles[1]
+        n = instr & 0x00FF
+        self.reg[x] = (self.reg[x] + n) & 0xFFFF
+        self.pc += 2
+
+    def _assign_reg(self, instr):
+        x = self._get_nibbles[1]
+        y = self._get_nibbles[2]
+        self.reg[x] = self.reg[y]
+        self.pc += 2
+
+    def _or_reg(self, instr):
+        x = self._get_nibbles[1]
+        y = self._get_nibbles[2]
+        self.reg[x] = self.reg[x] | self.reg[y]
+        self.pc += 2
+
+    def _and_reg(self, instr):
+        x = self._get_nibbles[1]
+        y = self._get_nibbles[2]
+        self.reg[x] = self.reg[x] & self.reg[y]
+        self.pc += 2
+
+    def _xor_reg(self, instr):
+        x = self._get_nibbles[1]
+        y = self._get_nibbles[2]
+        self.reg[x] = self.reg[x] ^ self.reg[y]
+        self.pc += 2
+
+    def _add_regs(self, instr):
+        x = self._get_nibbles[1]
+        y = self._get_nibbles[2]
+        self.reg[x] = self.reg[x] + self.reg[y]
+        # Check for carry
+        if self.reg[x] > 0xFFFF:
+            # Set Carry flag
+            self.reg[0xF] = 1
+        else:
+            # Unset Carry Flag
+            self.reg[0xF] = 0
+        self.reg[x] = self.reg[x] & 0xFFFF
+        self.pc += 2
+
+    def _sub_regs(self, instr):
+        x = self._get_nibbles[1]
+        y = self._get_nibbles[2]
+        self.reg[x] = self.reg[x] - self.reg[y]
+        # Check for borrow
+        if self.reg[x] < 0:
+            # Unset Carry flag
+            self.reg[0xF] = 0
+        else:
+            # Unset Carry Flag
+            self.reg[0xF] = 1
+        self.reg[x] = self.reg[x] & 0xFFFF
+        self.pc += 2
