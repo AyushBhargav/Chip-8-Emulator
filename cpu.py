@@ -1,3 +1,6 @@
+import random
+
+
 class CPU:
 
     class _Stack:
@@ -65,6 +68,22 @@ class CPU:
             self._add_regs(instr)
         elif 0x8005 <= instr <= 0x8FF5:
             self._sub_regs(instr)
+        elif 0x8006 <= instr <= 0x8FF6:
+            self._right_shift(instr)
+        elif 0x8007 <= instr <= 0x8FF7:
+            self._sub_regs_rev(instr)
+        elif 0x800E <= instr <= 0x8FFE:
+            self._left_shift(instr)
+        elif 0x9000 <= instr <= 0x9FF0:
+            self._skip_if_neq_reg(instr)
+        elif 0xA000 <= instr <= 0xAFFF:
+            self._set_index_reg(instr)
+        elif 0xB000 <= instr <= 0xBFFF:
+            self._jmp_addr_add(instr)
+        elif 0xC000 <= instr <= 0xCFFF:
+            self._set_rand_reg(instr)
+        elif 0xD000 <= instr <= 0xDFFF:
+            self._display_sprite(instr)
         else:
             raise Exception("Wrong opcode: " + str(instr))
 
@@ -177,7 +196,61 @@ class CPU:
             # Unset Carry flag
             self.reg[0xF] = 0
         else:
-            # Unset Carry Flag
+            # Set Carry Flag
             self.reg[0xF] = 1
         self.reg[x] = self.reg[x] & 0xFFFF
         self.pc += 2
+
+    def _right_shift(self, instr):
+        x = self._get_nibbles[1]
+        self.reg[0xF] = self.reg[x] & 0x1
+        self.reg[x] >>= 1
+        self.pc += 2
+
+    def _sub_regs_rev(self, instr):
+        x = self._get_nibbles[1]
+        y = self._get_nibbles[2]
+        self.reg[x] = self.reg[y] - self.reg[x]
+        # Check for borrow
+        if self.reg[x] < 0:
+            # Unset Carry flag
+            self.reg[0xF] = 0
+        else:
+            # Set Carry Flag
+            self.reg[0xF] = 1
+        self.reg[x] = self.reg[x] & 0xFFFF
+        self.pc += 2
+
+    def _left_shift(self, instr):
+        x = self._get_nibbles[1]
+        self.reg[0xF] = self.reg[x] >> 7
+        self.reg[x] = (self.reg[x] << 1) & 0xFF
+        self.pc += 2
+
+    def _skip_if_neq_reg(self, instr):
+        x = self._get_nibbles[1]
+        y = self._get_nibbles[2]
+        if self.reg[x] != self.reg[y]:
+            # Skip
+            self.pc += 4
+        else:
+            self.pc += 2
+
+    def _set_index_reg(self, instr):
+        addr = instr & 0x0FFF
+        self.i_reg = addr
+        self.pc += 2
+
+    def _jmp_addr_add(self, instr):
+        addr = instr & 0x0FFF
+        self.pc = self.reg[0] + addr
+
+    def _set_rand_reg(self, instr):
+        x = self._get_nibbles[1]
+        addr = instr & 0x00FF
+        self.reg[x] = random.randint(0, 0xFF) & addr
+        self.pc += 2
+
+    def _display_sprite(self, instr):
+        # TODO: Continue from now on
+        pass
