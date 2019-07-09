@@ -252,5 +252,17 @@ class CPU:
         self.pc += 2
 
     def _display_sprite(self, instr):
-        # TODO: Continue from now on
-        pass
+        collision_flag = False
+        x = self.reg[self._get_nibbles[1]]
+        y = self.reg[self._get_nibbles[2]]
+        N = instr & 0x0F
+        for n in range(0, N):
+            for b in range(0, 8):
+                # TODO: Fix overflow problem.
+                old_pixel = self.graphics[x + b][n]
+                self.graphics[x + b][n] |= bool((self.memory[self.i_reg + n] & (0x80 >> b)))
+                if old_pixel and not self.graphics[x + b][n]:
+                    # Collision detected
+                    collision_flag = True
+        if collision_flag:
+            self.reg[0xF] = 1
