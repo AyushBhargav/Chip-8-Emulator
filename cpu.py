@@ -21,16 +21,22 @@ class CPU:
             self.top += 1
             self.stack[self.top] = num
 
-    def __init__(self, rom):
+    def __init__(self):
         self.memory = [0] * 4096
         self.reg = [0] * 16
         self.i_reg = 0
         self.pc = 0
-        self.stack = _Stack()
+        self.stack = self._Stack()
         self.delay_timer = 0
         self.sound_timer = 0
         self.input = [False] * 16
-        self.graphics = [[0 for _ in 32] for _ in 64]
+        self.graphics = [False] * (64 * 32)
+
+    def decrement_counters(self):
+        if self.delay_timer > 0:
+            self.delay_timer -= 1
+        if self.sound_timer > 0:
+            self.sound_timer -= 1
 
     def cpu_cycle(self):
         if self.pc > len(self.memory):
@@ -84,6 +90,28 @@ class CPU:
             self._set_rand_reg(instr)
         elif 0xD000 <= instr <= 0xDFFF:
             self._display_sprite(instr)
+        elif 0xE09E <= instr <= 0xEF9E:
+            self._skip_key_down(instr)
+        elif 0xE0A1 <= instr <= 0xEFA1:
+            self._skip_key_up(instr)
+        elif 0xF007 <= instr <= 0xFF07:
+            self._set_reg_delay(instr)
+        elif 0xF00A <= instr <= 0xFF0A:
+            self._wait_key_press(instr)
+        elif 0xF015 <= instr <= 0xFF15:
+            self._set_delay_timer(instr)
+        elif 0xF018 <= instr <= 0xFF18:
+            self._set_sound_timer(instr)
+        elif 0xF01E <= instr <= 0xFF1E:
+            self._increment_i(instr)
+        elif 0xF029 <= instr <= 0xFF29:
+            self._set_font(instr)
+        elif 0xF033 <= instr <= 0xFF33:
+            self._bcd(instr)
+        elif 0xF055 <= instr <= 0xFF55:
+            self._reg_dump(instr)
+        elif 0xF065 <= instr <= 0xFF65:
+            self._reg_load(instr)
         else:
             raise Exception("Wrong opcode: " + str(instr))
 
@@ -258,11 +286,78 @@ class CPU:
         N = instr & 0x0F
         for n in range(0, N):
             for b in range(0, 8):
-                # TODO: Fix overflow problem.
-                old_pixel = self.graphics[x + b][n]
-                self.graphics[x + b][n] |= bool((self.memory[self.i_reg + n] & (0x80 >> b)))
-                if old_pixel and not self.graphics[x + b][n]:
+                index = (x + b) % 64
+                n_y = n % 32
+                old_pixel = self.graphics[index][n_y]
+                self.graphics[index][n_y] |= bool((self.memory[self.i_reg + n] & (0x80 >> b)))
+                if old_pixel and not self.graphics[index][n_y]:
                     # Collision detected
                     collision_flag = True
         if collision_flag:
             self.reg[0xF] = 1
+
+    def _skip_key_down(self, instr):
+        x = self._get_nibbles(1)
+        if self.input[self.reg[x]]:
+            self.pc += 4
+        else:
+            self.pc += 2
+
+    def _skip_key_up(self, instr):
+        x  = self._get_nibbles(1)
+        if not self.input[self.reg[x]]:
+            self.pc += 4
+        else:
+            self.pc += 2
+
+    def _set_reg_delay(self, instr):
+        x = self._get_nibbles[1]
+        self.reg[x] = self.delay_timer
+        self.pc += 2
+
+    def _wait_key_press(self, instr):
+        x = self._get_nibbles(1)
+        for i in self.input:
+            if i:
+                # Key is pressed. Move on to next instruction.
+                self.pc += 2
+                break
+
+    def _set_delay_timer(self, instr):
+        x = self._get_nibbles(1)
+        self.delay_timer = self.reg[x]
+        self.pc += 2
+
+    def _set_sound_timer(self, instr):
+        x = self._get_nibbles(1)
+        self.sound_timer = self.reg[x]
+        self.pc += 2
+
+    def _increment_i(self, instr):
+        x = self._get_nibbles(1)
+        self.i_reg += self.reg[x]
+        self.pc += 2
+
+    def _set_font(self, instr):
+        x = self._get_nibbles(1)
+        self.i_reg = reg[x] * 5
+        self.pc += 2
+
+    def _bcd(self, instr):
+        x = self._get_nibbles(1)
+        self.memory[self.i_reg] = int(self.reg[x] / 100)
+        self.memory[self.i_reg] = int(self.reg[x] / 10)
+        self.memory[self.i_reg] = int(self.reg[x] % 10)
+        self.pc += 2
+
+    def _reg_dump(self, instr):
+        x = self._get_nibbles(1)
+        for offset in range(0, x + 1):
+            self.memory[self.i_reg + offset] = self.reg[offset]
+        self.pc += 2
+
+    def _reg_load(self, instr):
+        x = self._get_nibbles(1)
+        for offset in range(0, x + 1):
+            self.reg[offset] = self.memory[self.i_reg + offset] & 0xFFFF
+        self.pc += 2
