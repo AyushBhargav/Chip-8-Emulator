@@ -32,6 +32,32 @@ class CPU:
         self.input = [False] * 16
         self.graphics = [False] * (64 * 32)
 
+    def load_program(hex_code):
+        for i, b in enumerate(hex_code):
+            self.memory[0x200 + i] = b
+
+    def load_font():
+        fonts = [
+            0xF0, 0x90, 0x90, 0x90, 0xF0, # 0
+            0x20, 0x60, 0x20, 0x20, 0x70, # 1
+            0xF0, 0x10, 0xF0, 0x80, 0xF0, # 2
+            0xF0, 0x10, 0xF0, 0x10, 0xF0, # 3
+            0x90, 0x90, 0xF0, 0x10, 0x10, # 4
+            0xF0, 0x80, 0xF0, 0x10, 0xF0, # 5
+            0xF0, 0x80, 0xF0, 0x90, 0xF0, # 6
+            0xF0, 0x10, 0x20, 0x40, 0x40, # 7
+            0xF0, 0x90, 0xF0, 0x90, 0xF0, # 8
+            0xF0, 0x90, 0xF0, 0x10, 0xF0, # 9
+            0xF0, 0x90, 0xF0, 0x90, 0x90, # A
+            0xE0, 0x90, 0xE0, 0x90, 0xE0, # B
+            0xF0, 0x80, 0x80, 0x80, 0xF0, # C
+            0xE0, 0x90, 0x90, 0x90, 0xE0, # D
+            0xF0, 0x80, 0xF0, 0x80, 0xF0, # E
+            0xF0, 0x80, 0xF0, 0x80, 0x80  # F
+        ]
+        for i, font in enumerate(fonts):
+            self.memory[i] = font
+
     def decrement_counters(self):
         if self.delay_timer > 0:
             self.delay_timer -= 1
@@ -280,17 +306,17 @@ class CPU:
         self.pc += 2
 
     def _display_sprite(self, instr):
+        # TODO: Convert for single array 2D matrix.
         collision_flag = False
         x = self.reg[self._get_nibbles[1]]
         y = self.reg[self._get_nibbles[2]]
         N = instr & 0x0F
         for n in range(0, N):
             for b in range(0, 8):
-                index = (x + b) % 64
-                n_y = n % 32
-                old_pixel = self.graphics[index][n_y]
-                self.graphics[index][n_y] |= bool((self.memory[self.i_reg + n] & (0x80 >> b)))
-                if old_pixel and not self.graphics[index][n_y]:
+                index = x + b + (y * (n - 1))
+                old_pixel = self.graphics[index]
+                self.graphics[index] ^= bool((self.memory[self.i_reg + n] & (0x80 >> b)))
+                if old_pixel and not self.graphics[index]:
                     # Collision detected
                     collision_flag = True
         if collision_flag:

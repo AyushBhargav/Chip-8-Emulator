@@ -39,7 +39,6 @@ def start_loop(chip8):
         pygame.display.flip()
         screen.fill((0, 0, 0)) # Clears screen
         draw(screen, chip8.graphics)
-        print("Pressed keys:" + str(chip8.input))
         clock.tick(60)
 
 
