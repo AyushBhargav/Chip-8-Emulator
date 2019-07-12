@@ -36,6 +36,7 @@ def start_loop(chip8):
                 emulation_complete = True
             get_input_event(event, chip8.input)
 
+        chip8.cpu_cycle()
         pygame.display.flip()
         screen.fill((0, 0, 0)) # Clears screen
         draw(screen, chip8.graphics)

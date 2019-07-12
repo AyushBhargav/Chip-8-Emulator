@@ -32,11 +32,11 @@ class CPU:
         self.input = [False] * 16
         self.graphics = [False] * (64 * 32)
 
-    def load_program(hex_code):
+    def load_program(self, hex_code):
         for i, b in enumerate(hex_code):
             self.memory[0x200 + i] = b
 
-    def load_font():
+    def load_font(self):
         fonts = [
             0xF0, 0x90, 0x90, 0x90, 0xF0, # 0
             0x20, 0x60, 0x20, 0x20, 0x70, # 1
@@ -70,7 +70,10 @@ class CPU:
 
         instr = self._get_instr()
         # Really long if else ladder now.
-        if instr == 0x00E0:
+        if 0x0000 <= instr <= 0x0FFF:
+            self.pc += 2
+            return # Do nothing for RCA 1802
+        elif instr == 0x00E0:
             self._clear_screen()
         elif instr == 0x00EE:
             self._return_subroutine()
@@ -143,7 +146,7 @@ class CPU:
 
     # Helper functions for CPU.
     def _get_instr(self):
-        return (self.instructions[self.pc] << 4) | (self.instructions[self.pc + 1])
+        return (self.memory[self.pc] << 8) | (self.memory[self.pc + 1])
 
     def _get_nibbles(self, instr):
         return [(instr & 0xF000) >> 12, (instr & 0x0F00) >> 8, (instr & 0x00F0) >> 4, (instr & 0x000F)]
@@ -165,7 +168,7 @@ class CPU:
         self.pc = addr
 
     def _skip_if_eq_num(self, instr):
-        x = self._get_nibbles[1]
+        x = self._get_nibbles(instr)[1]
         n = instr & 0x00FF
         if self.reg[x] == n:
             # Skip
@@ -174,7 +177,7 @@ class CPU:
             self.pc += 2
 
     def _skip_if_neq_num(self, instr):
-        x = self._get_nibbles[1]
+        x = self._get_nibbles(instr)[1]
         n = instr & 0x00FF
         if self.reg[x] != n:
             # Skip
@@ -183,8 +186,8 @@ class CPU:
             self.pc += 2
 
     def _skip_if_eq_reg(self, instr):
-        x = self._get_nibbles[1]
-        y = self._get_nibbles[2]
+        x = self._get_nibbles(instr)[1]
+        y = self._get_nibbles(instr)[2]
         if self.reg[x] == self.reg[y]:
             # Skip
             self.pc += 4
@@ -192,44 +195,44 @@ class CPU:
             self.pc += 2
 
     def _set_reg_num(self, instr):
-        x = self._get_nibbles[1]
+        x = self._get_nibbles(instr)[1]
         n = instr & 0x00FF
         self.reg[x] = n
         self.pc += 2
 
     def _add_reg_num(self, instr):
-        x = self._get_nibbles[1]
+        x = self._get_nibbles(instr)[1]
         n = instr & 0x00FF
         self.reg[x] = (self.reg[x] + n) & 0xFFFF
         self.pc += 2
 
     def _assign_reg(self, instr):
-        x = self._get_nibbles[1]
-        y = self._get_nibbles[2]
+        x = self._get_nibbles(instr)[1]
+        y = self._get_nibbles(instr)[2]
         self.reg[x] = self.reg[y]
         self.pc += 2
 
     def _or_reg(self, instr):
-        x = self._get_nibbles[1]
-        y = self._get_nibbles[2]
+        x = self._get_nibbles(instr)[1]
+        y = self._get_nibbles(instr)[2]
         self.reg[x] = self.reg[x] | self.reg[y]
         self.pc += 2
 
     def _and_reg(self, instr):
-        x = self._get_nibbles[1]
-        y = self._get_nibbles[2]
+        x = self._get_nibbles(instr)[1]
+        y = self._get_nibbles(instr)[2]
         self.reg[x] = self.reg[x] & self.reg[y]
         self.pc += 2
 
     def _xor_reg(self, instr):
-        x = self._get_nibbles[1]
-        y = self._get_nibbles[2]
+        x = self._get_nibbles(instr)[1]
+        y = self._get_nibbles(instr)[2]
         self.reg[x] = self.reg[x] ^ self.reg[y]
         self.pc += 2
 
     def _add_regs(self, instr):
-        x = self._get_nibbles[1]
-        y = self._get_nibbles[2]
+        x = self._get_nibbles(instr)[1]
+        y = self._get_nibbles(instr)[2]
         self.reg[x] = self.reg[x] + self.reg[y]
         # Check for carry
         if self.reg[x] > 0xFFFF:
@@ -242,8 +245,8 @@ class CPU:
         self.pc += 2
 
     def _sub_regs(self, instr):
-        x = self._get_nibbles[1]
-        y = self._get_nibbles[2]
+        x = self._get_nibbles(instr)[1]
+        y = self._get_nibbles(instr)[2]
         self.reg[x] = self.reg[x] - self.reg[y]
         # Check for borrow
         if self.reg[x] < 0:
@@ -256,14 +259,14 @@ class CPU:
         self.pc += 2
 
     def _right_shift(self, instr):
-        x = self._get_nibbles[1]
+        x = self._get_nibbles(instr)[1]
         self.reg[0xF] = self.reg[x] & 0x1
         self.reg[x] >>= 1
         self.pc += 2
 
     def _sub_regs_rev(self, instr):
-        x = self._get_nibbles[1]
-        y = self._get_nibbles[2]
+        x = self._get_nibbles(instr)[1]
+        y = self._get_nibbles(instr)[2]
         self.reg[x] = self.reg[y] - self.reg[x]
         # Check for borrow
         if self.reg[x] < 0:
@@ -276,14 +279,14 @@ class CPU:
         self.pc += 2
 
     def _left_shift(self, instr):
-        x = self._get_nibbles[1]
+        x = self._get_nibbles(instr)[1]
         self.reg[0xF] = self.reg[x] >> 7
         self.reg[x] = (self.reg[x] << 1) & 0xFF
         self.pc += 2
 
     def _skip_if_neq_reg(self, instr):
-        x = self._get_nibbles[1]
-        y = self._get_nibbles[2]
+        x = self._get_nibbles(instr)[1]
+        y = self._get_nibbles(instr)[2]
         if self.reg[x] != self.reg[y]:
             # Skip
             self.pc += 4
@@ -300,7 +303,7 @@ class CPU:
         self.pc = self.reg[0] + addr
 
     def _set_rand_reg(self, instr):
-        x = self._get_nibbles[1]
+        x = self._get_nibbles(instr)[1]
         addr = instr & 0x00FF
         self.reg[x] = random.randint(0, 0xFF) & addr
         self.pc += 2
@@ -308,8 +311,8 @@ class CPU:
     def _display_sprite(self, instr):
         # TODO: Convert for single array 2D matrix.
         collision_flag = False
-        x = self.reg[self._get_nibbles[1]]
-        y = self.reg[self._get_nibbles[2]]
+        x = self.reg[self._get_nibbles(instr)[1]]
+        y = self.reg[self._get_nibbles(instr)[2]]
         N = instr & 0x0F
         for n in range(0, N):
             for b in range(0, 8):
@@ -323,26 +326,26 @@ class CPU:
             self.reg[0xF] = 1
 
     def _skip_key_down(self, instr):
-        x = self._get_nibbles(1)
+        x = self._get_nibbles(instr)[1]
         if self.input[self.reg[x]]:
             self.pc += 4
         else:
             self.pc += 2
 
     def _skip_key_up(self, instr):
-        x  = self._get_nibbles(1)
+        x  = self._get_nibbles(instr)[1]
         if not self.input[self.reg[x]]:
             self.pc += 4
         else:
             self.pc += 2
 
     def _set_reg_delay(self, instr):
-        x = self._get_nibbles[1]
+        x = self._get_nibbles(instr)[1]
         self.reg[x] = self.delay_timer
         self.pc += 2
 
     def _wait_key_press(self, instr):
-        x = self._get_nibbles(1)
+        x = self._get_nibbles(instr)[1]
         for i in self.input:
             if i:
                 # Key is pressed. Move on to next instruction.
@@ -350,40 +353,40 @@ class CPU:
                 break
 
     def _set_delay_timer(self, instr):
-        x = self._get_nibbles(1)
+        x = self._get_nibbles(instr)[1]
         self.delay_timer = self.reg[x]
         self.pc += 2
 
     def _set_sound_timer(self, instr):
-        x = self._get_nibbles(1)
+        x = self._get_nibbles(instr)[1]
         self.sound_timer = self.reg[x]
         self.pc += 2
 
     def _increment_i(self, instr):
-        x = self._get_nibbles(1)
+        x = self._get_nibbles(instr)[1]
         self.i_reg += self.reg[x]
         self.pc += 2
 
     def _set_font(self, instr):
-        x = self._get_nibbles(1)
+        x = self._get_nibbles(instr)[1]
         self.i_reg = reg[x] * 5
         self.pc += 2
 
     def _bcd(self, instr):
-        x = self._get_nibbles(1)
+        x = self._get_nibbles(instr)[1]
         self.memory[self.i_reg] = int(self.reg[x] / 100)
         self.memory[self.i_reg] = int(self.reg[x] / 10)
         self.memory[self.i_reg] = int(self.reg[x] % 10)
         self.pc += 2
 
     def _reg_dump(self, instr):
-        x = self._get_nibbles(1)
+        x = self._get_nibbles(instr)[1]
         for offset in range(0, x + 1):
             self.memory[self.i_reg + offset] = self.reg[offset]
         self.pc += 2
 
     def _reg_load(self, instr):
-        x = self._get_nibbles(1)
+        x = self._get_nibbles(instr)[1]
         for offset in range(0, x + 1):
             self.reg[offset] = self.memory[self.i_reg + offset] & 0xFFFF
         self.pc += 2
