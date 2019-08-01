@@ -6,3 +6,8 @@
  \____||_| |_||_|| .__/         \___/  |_____||_| |_| |_| \__,_||_| \__,_| \__| \___/ |_|
                  |_|
 ~~~~
+
+Toy emulator for Chip-8 virtual machines.
+
+# Implemented features
+All opcodes of Chip-8 have been implemented and tested. There are some problems in input though which needs to be fixed.
